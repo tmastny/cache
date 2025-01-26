@@ -349,67 +349,80 @@ void print_usage() {
 BPNode* bulk_load(int* values, int n) {
     if (n == 0) return NULL;
     
-    // First, create the leaf level
-    BPNode* first_leaf = create_node(1);
-    BPNode* current_leaf = first_leaf;
-    int leaf_count = 0;
-    BPNode* leaf_nodes[1000];  // Array to store leaf nodes
+    // Calculate number of leaf nodes needed
+    // Each leaf can hold up to MAX_KEYS (3) values
+    int num_leaves = (n + MAX_KEYS - 1) / MAX_KEYS;  // Ceiling division
     
-    // Fill leaf nodes
+    // Calculate number of internal nodes needed at each level
+    // Each internal node can point to MAX_CHILDREN (4) children
+    int total_internal_nodes = 0;
+    int nodes_at_level = num_leaves;
+    while (nodes_at_level > 1) {
+        nodes_at_level = (nodes_at_level + MAX_CHILDREN - 1) / MAX_CHILDREN;
+        total_internal_nodes += nodes_at_level;
+    }
+    
+    // Allocate arrays dynamically
+    BPNode** leaf_nodes = malloc(num_leaves * sizeof(BPNode*));
+    BPNode** current_level = malloc(num_leaves * sizeof(BPNode*));  // Max size needed
+    BPNode** next_level = malloc(((num_leaves + 1) / 2) * sizeof(BPNode*));  // Max size needed for next level
+    
+    // Create and fill leaf nodes
+    int leaf_count = 0;
+    BPNode* current_leaf = create_node(1);
+    leaf_nodes[leaf_count++] = current_leaf;
+    
     for (int i = 0; i < n; i++) {
         if (current_leaf->num_keys == MAX_KEYS) {
-            // Create new leaf and link it
-            BPNode* new_leaf = create_node(1);
-            current_leaf->next = new_leaf;
-            current_leaf = new_leaf;
+            current_leaf = create_node(1);
+            leaf_nodes[leaf_count - 1]->next = current_leaf;
             leaf_nodes[leaf_count++] = current_leaf;
         }
         current_leaf->keys[current_leaf->num_keys++] = values[i];
     }
     
-    // Build the internal nodes bottom-up
-    BPNode* current_level[1000];
-    int current_size = leaf_count + 1;
-    
     // Copy leaf pointers to current level
-    for (int i = 0; i < current_size; i++) {
-        current_level[i] = (i == 0) ? first_leaf : leaf_nodes[i-1];
+    for (int i = 0; i < leaf_count; i++) {
+        current_level[i] = leaf_nodes[i];
     }
+    int current_size = leaf_count;
     
-    // Keep building levels until we have just one node (the root)
+    // Build internal nodes bottom-up
     while (current_size > 1) {
         int next_size = 0;
-        BPNode* next_level[1000];
-        
-        // Create parent nodes for current level
         BPNode* current_parent = NULL;
         int parent_count = 0;
         
         for (int i = 0; i < current_size; i++) {
-            if (parent_count == 0 || parent_count == MAX_KEYS + 1) {
-                // Need new parent node
+            if (parent_count == 0) {
                 current_parent = create_node(0);
                 next_level[next_size++] = current_parent;
-                parent_count = 0;
             }
             
+            current_parent->children[parent_count] = current_level[i];
             if (parent_count > 0) {
-                // Add separator key from first key of right node
+                // Add separator key from first key of current child
                 current_parent->keys[current_parent->num_keys++] = current_level[i]->keys[0];
             }
+            parent_count++;
             
-            // Add child pointer
-            current_parent->children[parent_count++] = current_level[i];
+            if (parent_count == MAX_CHILDREN || i == current_size - 1) {
+                parent_count = 0;
+            }
         }
         
         // Update for next iteration
         current_size = next_size;
-        for (int i = 0; i < current_size; i++) {
-            current_level[i] = next_level[i];
-        }
+        memcpy(current_level, next_level, next_size * sizeof(BPNode*));
     }
     
-    return current_level[0];  // Return root
+    // Free temporary arrays
+    BPNode* root = current_level[0];
+    free(leaf_nodes);
+    free(current_level);
+    free(next_level);
+    
+    return root;
 }
 
 int main(int argc, char* argv[]) {
