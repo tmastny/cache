@@ -26,6 +26,7 @@ void run_example_1();
 void run_example_2();
 void run_example_3();
 void run_example_4();
+void run_example_5();
 void print_usage();
 void split_leaf_node(BPNode* parent, int index, BPNode* leaf);
 void split_internal_node(BPNode* parent, int index, BPNode* internal);
@@ -337,6 +338,27 @@ void run_example_4() {
     }
 }
 
+void run_example_5() {
+    BPNode* root = NULL;
+    int test_values[] = {10, 20, 30, 25};
+    
+    printf("\nExample 5: Non-Sequential Insertion Pattern\n");
+    printf("Inserting values in order: 10, 20, 30, 25\n");
+    
+    for(int i = 0; i < 4; i++) {
+        root = insert(root, test_values[i]);
+        printf("\nAfter inserting %d:\n", test_values[i]);
+        print_tree(root, 0);
+        printf("------------------------\n");
+    }
+    
+    // Test searches
+    printf("\nTesting searches:\n");
+    for (int i = 0; i < 4; i++) {
+        search_and_print(root, test_values[i]);
+    }
+}
+
 void print_usage() {
     printf("Usage: bptree -e <example_number>\n");
     printf("Available examples:\n");
@@ -344,24 +366,25 @@ void print_usage() {
     printf("  2: Non-sequential Insertion Pattern\n");
     printf("  3: Bulk Loading (values 1-100)\n");
     printf("  4: Sequential Insertion Limitation\n");
+    printf("  5: Inserting 10, 20, 30, 25\n");
 }
 
 BPNode* bulk_load(int* values, int n) {
     if (n == 0) return NULL;
-    
+
     // Calculate number of leaf nodes needed
     int num_leaves = (n + MAX_KEYS - 1) / MAX_KEYS;  // Ceiling division
-    
+
     // Allocate arrays for leaf nodes and internal nodes
     BPNode** leaf_nodes = malloc(num_leaves * sizeof(BPNode*));
     BPNode** current_level = malloc(num_leaves * sizeof(BPNode*));
     BPNode** next_level = malloc(num_leaves * sizeof(BPNode*));
-    
+
     // Create and fill leaf nodes
     int leaf_idx = 0;
     BPNode* current_leaf = create_node(1);
     leaf_nodes[leaf_idx++] = current_leaf;
-    
+
     for (int i = 0; i < n; i++) {
         if (current_leaf->num_keys == MAX_KEYS) {
             current_leaf = create_node(1);
@@ -370,54 +393,64 @@ BPNode* bulk_load(int* values, int n) {
         }
         current_leaf->keys[current_leaf->num_keys++] = values[i];
     }
-    
-    // Initialize current_level with leaf nodes
-    for (int i = 0; i < leaf_idx; i++) {
+
+    // Link leaf nodes and collect their first keys for parent internal nodes
+    int* first_keys = malloc(num_leaves * sizeof(int));
+    for (int i = 0; i < num_leaves; i++) {
+        first_keys[i] = leaf_nodes[i]->keys[0];
         current_level[i] = leaf_nodes[i];
     }
-    int current_size = leaf_idx;
-    
+
+    int current_size = num_leaves;
+
     // Build internal nodes bottom-up
     while (current_size > 1) {
         int next_size = 0;
         int i = 0;
-        
+
         while (i < current_size) {
             BPNode* parent = create_node(0);
             next_level[next_size++] = parent;
-            
+
+            // Determine how many children to add to this parent (2 <= children <= ORDER)
             int remaining = current_size - i;
             int children_to_add = (remaining > MAX_CHILDREN) ? MAX_CHILDREN : remaining;
-            
-            // Ensure remaining after this group has at least 2 children or take all
-            if (remaining - children_to_add < 2 && remaining - children_to_add > 0) {
-                children_to_add = remaining;
+
+            // Adjust to ensure remaining nodes can form valid groups
+            if (remaining - children_to_add > 0 && remaining - children_to_add < 2) {
+                children_to_add = remaining - 1;  // Leave at least 2 nodes for next group
             }
-            
-            // Add children to parent
+
+            // Add children to parent and set keys
             for (int j = 0; j < children_to_add; j++) {
                 parent->children[j] = current_level[i + j];
                 if (j > 0) {
-                    parent->keys[j - 1] = current_level[i + j]->keys[0];
+                    // Use the first key of the leftmost leaf in this child's subtree
+                    BPNode* child = current_level[i + j];
+                    while (!child->is_leaf) {
+                        child = child->children[0];
+                    }
+                    parent->keys[j - 1] = child->keys[0];
                     parent->num_keys++;
                 }
             }
             i += children_to_add;
         }
-        
-        // Update current_level and current_size for next iteration
+
+        // Update current_level for next iteration
         current_size = next_size;
-        for (int k = 0; k < current_size; k++) {
-            current_level[k] = next_level[k];
-        }
+        BPNode** temp = current_level;
+        current_level = next_level;
+        next_level = temp;
     }
-    
+
     BPNode* root = (current_size == 1) ? current_level[0] : NULL;
-    
+
     free(leaf_nodes);
     free(current_level);
     free(next_level);
-    
+    free(first_keys);
+
     return root;
 }
 
@@ -441,6 +474,9 @@ int main(int argc, char* argv[]) {
             break;
         case 4:
             run_example_4();
+            break;
+        case 5:
+            run_example_5();
             break;
         default:
             printf("Invalid example number: %d\n", example);
