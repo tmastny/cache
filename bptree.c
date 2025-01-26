@@ -350,74 +350,70 @@ BPNode* bulk_load(int* values, int n) {
     if (n == 0) return NULL;
     
     // Calculate number of leaf nodes needed
-    // Each leaf can hold up to MAX_KEYS (3) values
     int num_leaves = (n + MAX_KEYS - 1) / MAX_KEYS;  // Ceiling division
     
-    // Calculate number of internal nodes needed at each level
-    // Each internal node can point to MAX_CHILDREN (4) children
-    int total_internal_nodes = 0;
-    int nodes_at_level = num_leaves;
-    while (nodes_at_level > 1) {
-        nodes_at_level = (nodes_at_level + MAX_CHILDREN - 1) / MAX_CHILDREN;
-        total_internal_nodes += nodes_at_level;
-    }
-    
-    // Allocate arrays dynamically
+    // Allocate arrays for leaf nodes and internal nodes
     BPNode** leaf_nodes = malloc(num_leaves * sizeof(BPNode*));
-    BPNode** current_level = malloc(num_leaves * sizeof(BPNode*));  // Max size needed
-    BPNode** next_level = malloc(((num_leaves + 1) / 2) * sizeof(BPNode*));  // Max size needed for next level
+    BPNode** current_level = malloc(num_leaves * sizeof(BPNode*));
+    BPNode** next_level = malloc(num_leaves * sizeof(BPNode*));
     
     // Create and fill leaf nodes
-    int leaf_count = 0;
+    int leaf_idx = 0;
     BPNode* current_leaf = create_node(1);
-    leaf_nodes[leaf_count++] = current_leaf;
+    leaf_nodes[leaf_idx++] = current_leaf;
     
     for (int i = 0; i < n; i++) {
         if (current_leaf->num_keys == MAX_KEYS) {
             current_leaf = create_node(1);
-            leaf_nodes[leaf_count - 1]->next = current_leaf;
-            leaf_nodes[leaf_count++] = current_leaf;
+            leaf_nodes[leaf_idx - 1]->next = current_leaf;
+            leaf_nodes[leaf_idx++] = current_leaf;
         }
         current_leaf->keys[current_leaf->num_keys++] = values[i];
     }
     
-    // Copy leaf pointers to current level
-    for (int i = 0; i < leaf_count; i++) {
+    // Initialize current_level with leaf nodes
+    for (int i = 0; i < leaf_idx; i++) {
         current_level[i] = leaf_nodes[i];
     }
-    int current_size = leaf_count;
+    int current_size = leaf_idx;
     
     // Build internal nodes bottom-up
     while (current_size > 1) {
         int next_size = 0;
-        BPNode* current_parent = NULL;
-        int parent_count = 0;
+        int i = 0;
         
-        for (int i = 0; i < current_size; i++) {
-            if (parent_count == 0) {
-                current_parent = create_node(0);
-                next_level[next_size++] = current_parent;
+        while (i < current_size) {
+            BPNode* parent = create_node(0);
+            next_level[next_size++] = parent;
+            
+            int remaining = current_size - i;
+            int children_to_add = (remaining > MAX_CHILDREN) ? MAX_CHILDREN : remaining;
+            
+            // Ensure remaining after this group has at least 2 children or take all
+            if (remaining - children_to_add < 2 && remaining - children_to_add > 0) {
+                children_to_add = remaining;
             }
             
-            current_parent->children[parent_count] = current_level[i];
-            if (parent_count > 0) {
-                // Add separator key from first key of current child
-                current_parent->keys[current_parent->num_keys++] = current_level[i]->keys[0];
+            // Add children to parent
+            for (int j = 0; j < children_to_add; j++) {
+                parent->children[j] = current_level[i + j];
+                if (j > 0) {
+                    parent->keys[j - 1] = current_level[i + j]->keys[0];
+                    parent->num_keys++;
+                }
             }
-            parent_count++;
-            
-            if (parent_count == MAX_CHILDREN || i == current_size - 1) {
-                parent_count = 0;
-            }
+            i += children_to_add;
         }
         
-        // Update for next iteration
+        // Update current_level and current_size for next iteration
         current_size = next_size;
-        memcpy(current_level, next_level, next_size * sizeof(BPNode*));
+        for (int k = 0; k < current_size; k++) {
+            current_level[k] = next_level[k];
+        }
     }
     
-    // Free temporary arrays
-    BPNode* root = current_level[0];
+    BPNode* root = (current_size == 1) ? current_level[0] : NULL;
+    
     free(leaf_nodes);
     free(current_level);
     free(next_level);
