@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdbool.h>
+#include <time.h>
 
 // We'll use the definition of ORDER defined here:
 // https://cs186berkeley.net/notes/note4/
@@ -55,8 +56,13 @@ void bptree_init(BPTree* bptree) {
     bptree->root = node_new(LEAF);
 }
 
-// Search function
-BPNode* search(BPNode* node, int key) {
+typedef struct Search {
+    BPNode* node;
+    int index;
+} Search;
+
+Search bptree_search(BPTree* bptree, int key) {
+    BPNode* node = bptree->root;
     while (node->type != LEAF) {
         int i = 0;
         while (i < node->nkeys && key >= node->keys[i]) {
@@ -64,8 +70,14 @@ BPNode* search(BPNode* node, int key) {
         }
         node = node->children[i];
     }
+
+    for (int i = 0; i < node->nkeys; i++) {
+        if (node->keys[i] == key) {
+            return (Search){node, i};
+        }
+    }
     
-    return node;
+    return (Search){NULL, -1};
 }
 
 void node_insert_entry(BPNode* node, int key, BPNode* child) {
@@ -200,18 +212,21 @@ void print_tree(BPNode* root, int level) {
 }
 
 // Let's also add a helper function to make testing easier
-void search_and_print(BPNode* root, int key) {
+void search_and_print(BPTree* bptree, int key) {
     printf("\nSearching for %d:\n", key);
-    BPNode* result = search(root, key);
-    if (result != NULL) {
-        printf("Found key %d in leaf node with keys: ", key);
-        for (int i = 0; i < result->nkeys; i++) {
-            printf("%d ", result->keys[i]);
-        }
-        printf("\n");
-    } else {
+
+    Search result = bptree_search(bptree, key);
+
+    if (result.index == -1) {
         printf("Key %d not found in the tree\n", key);
+        return;
     }
+
+    printf("Found key %d at index %d in leaf node with keys:\n  ", key, result.index);
+    for (int i = 0; i < result.node->nkeys; i++) {
+        printf("%d ", result.node->keys[i]);
+    }
+    printf("\n");
 }
 
 typedef struct Parent {
@@ -268,9 +283,6 @@ void bptree_bulk_insert(BPTree* bptree, int* values, int n) {
 
     int i = 0;
     while (i < n) {
-        if (i == 20) {
-            printf("inserting %d\n", values[i]);
-        }
         BPNode* leaf = node_new(LEAF);
         
         while (i < n && leaf->nkeys < MAX_KEYS) {
@@ -308,7 +320,7 @@ void run_example_1() {
     // Test searches
     int search_keys[] = {30, 50, 90, 100};
     for (int i = 0; i < 4; i++) {
-        search_and_print(bptree.root, search_keys[i]);
+        search_and_print(&bptree, search_keys[i]);
     }
 }
 
@@ -353,7 +365,7 @@ void run_example_3() {
     // Test some searches
     int search_keys[] = {1, 50, 100, 101};
     for (int i = 0; i < 4; i++) {
-        search_and_print(bptree.root, search_keys[i]);
+        search_and_print(&bptree, search_keys[i]);
     }
 }
 
@@ -399,7 +411,7 @@ void run_example_5() {
     // Test searches
     printf("\nTesting searches:\n");
     for (int i = 0; i < 4; i++) {
-        search_and_print(bptree.root, test_values[i]);
+        search_and_print(&bptree, test_values[i]);
     }
 }
 
@@ -448,6 +460,43 @@ void run_example_12() {
     }
 }
 
+void example_100() {
+    const int N = 100000000;  // 100M elements
+    const int SEARCHES = 1000000;  // 1M searches
+    
+    printf("Order: %d\n", ORDER);
+    
+    int* values = (int*)malloc(sizeof(int) * N);
+    for (int i = 0; i < N; i++) {
+        values[i] = i;
+    }
+    
+    clock_t start = clock();
+    bptree_bulk_insert(&bptree, values, N);
+    clock_t end = clock();
+    double bulk_time = ((double)(end - start)) / CLOCKS_PER_SEC;
+    
+    // Free the values array as we don't need it anymore
+    free(values);
+    
+    // Perform random searches
+    start = clock();
+    int found = 0;
+    for (int i = 0; i < SEARCHES; i++) {
+        int key = rand() % N;  // Random number between 0 and N-1
+        Search result = bptree_search(&bptree, key);
+        if (result.node != NULL) {
+            found++;
+        }
+    }
+    end = clock();
+    
+    double search_time = ((double)(end - start)) / CLOCKS_PER_SEC;
+    double avg_search_time = (search_time * 1000000.0) / SEARCHES;  // Convert to microseconds
+    
+    printf("Average search time: %.2f microseconds\n", avg_search_time);
+}
+
 void print_usage() {
     printf("Usage: bptree -e <example_number>\n");
     printf("Available examples:\n");
@@ -459,6 +508,7 @@ void print_usage() {
     printf("  10: Simple Sequential Insertion (10, 20, 30, 40)\n");
     printf("  11: Mixed Sequential/Non-Sequential (10, 20, 30, 40, 25, 26, 29)\n");
     printf("  12: Mixed Sequential/Non-Sequential (10, 20, 30, 40, 25)\n");
+    printf("  100: Bulk Loading and Random Searches\n");
 }
 
 int main(int argc, char* argv[]) {
@@ -495,6 +545,9 @@ int main(int argc, char* argv[]) {
             break;
         case 12:
             run_example_12();
+            break;
+        case 100:
+            example_100();
             break;
         default:
             printf("Invalid example number: %d\n", example);

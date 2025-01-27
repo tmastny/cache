@@ -7,9 +7,9 @@
             "args": [
                 "-fdiagnostics-color=always",
                 "-g",
-                "${workspaceFolder}/*.c",
+                "${workspaceFolder}/bptree/*.c",
                 "-o",
-                "${workspaceFolder}/bptree"
+                "${workspaceFolder}/bptree/bptree"
             ],
             "options": {
                 "cwd": "${fileDirname}"

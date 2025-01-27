@@ -8,7 +8,7 @@
         "name": "(lldb) Launch",
         "type": "cppdbg",
         "request": "launch",
-        "program": "${workspaceFolder}/bptree",
+        "program": "${workspaceFolder}/bptree/bptree",
         "args": ["-e", "3"],
         "stopAtEntry": false,
         "cwd": "${fileDirname}",
