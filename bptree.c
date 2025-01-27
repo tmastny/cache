@@ -96,17 +96,23 @@ Split node_split(BPNode* node, int key) {
 
     // If the node is an internal node, we need to MOVE
     // the first key to the parent node.
-    int copy_offset = 0;
+    int key_copy_start = node->nkeys / 2;
     if (node->type == INTERNAL) {
-        copy_offset = 1;
+        key_copy_start++;
     }
 
-    for (int i = node->nkeys / 2 + copy_offset; i < node->nkeys; i++) {
+    for (int i = key_copy_start; i < node->nkeys; i++) {
         new_node->keys[new_node->nkeys++] = node->keys[i];
         new_node->children[new_node->nkeys - 1] = node->children[i];
         node->keys[i] = 0;
         node->children[i] = NULL;
     }
+
+    new_node->children[new_node->nkeys] = node->children[node->nkeys];
+
+    node->keys[node->nkeys / 2] = 0;
+    node->children[node->nkeys / 2 + 1] = NULL;
+    node->children[node->nkeys] = NULL;
 
     node->nkeys = node->nkeys / 2;
 
@@ -115,9 +121,12 @@ Split node_split(BPNode* node, int key) {
 
 // Insert a key into the B+ tree
 void node_insert(BPNode* node, int key, BPNode* child) {
+    if (key == 39) {
+        printf("node_insert: key = %d\n", key);
+    }
     BPNode* stack[100];
-    stack[0] = node;
     int top = 1;
+    stack[0] = NULL;
     while (node->type != LEAF) {
         int i = 0;
         while (i < node->nkeys && key >= node->keys[i]) {
@@ -137,7 +146,7 @@ void node_insert(BPNode* node, int key, BPNode* child) {
         key = split.key;
         child = split.right;
 
-        if (top - 1 == 0) {
+        if (parent == NULL) {
             BPNode* parent = create_node(INTERNAL);
             parent->children[0] = bptree.root;
             node_insert_entry(parent, key, child);
@@ -148,6 +157,8 @@ void node_insert(BPNode* node, int key, BPNode* child) {
         node = stack[--top];
     }
 }
+
+void print_tree(BPNode* root, int level);
 
 void bptree_insert(BPTree* bptree, int key) {
     node_insert(bptree->root, key, NULL);
@@ -231,6 +242,7 @@ void run_example_2() {
     // Insert values in a pattern that allows for fuller nodes
     // First batch: multiples of 3
     for(int i = 3; i <= 99; i += 3) {
+        printf("inserting %d\n", i);
         bptree_insert(&bptree, i);
     }
     
