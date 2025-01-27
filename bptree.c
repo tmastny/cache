@@ -1,195 +1,156 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#define ORDER 4  // Maximum number of children per internal node
-#define MAX_KEYS (ORDER - 1)  // Maximum number of keys per node
-#define MAX_CHILDREN (ORDER)  // Same as ORDER, maximum number of children
+#include <stdbool.h>
+
+// We'll use the definition of ORDER defined here:
+// https://cs186berkeley.net/notes/note4/
+#define ORDER 2 
+#define MAX_KEYS (2 * ORDER)  // Maximum number of keys per node
+#define MAX_CHILDREN (2 * ORDER + 1)  // Same as ORDER, maximum number of children
+
+typedef enum NodeType {
+    LEAF,
+    INTERNAL
+} NodeType;
 
 // Structure for B+ tree nodes
+// Add extra key to support splits
 typedef struct BPNode {
-    int keys[MAX_KEYS];
-    struct BPNode* children[MAX_CHILDREN];
+    int keys[MAX_KEYS + 1];
+    struct BPNode* children[MAX_CHILDREN + 1];
     struct BPNode* next;  // For leaf node linking
-    int num_keys;
-    int is_leaf;
+    int nkeys;
+    NodeType type;
 } BPNode;
 
-// Function prototypes
-BPNode* create_node(int is_leaf);
-BPNode* insert(BPNode* root, int key);
-void insert_non_full(BPNode* node, int key);
-void split_child(BPNode* parent, int index, BPNode* child);
-BPNode* search(BPNode* root, int key);
-void print_tree(BPNode* root, int level);
-void search_and_print(BPNode* root, int key);
-void run_example_1();
-void run_example_2();
-void run_example_3();
-void run_example_4();
-void run_example_5();
-void print_usage();
-void split_leaf_node(BPNode* parent, int index, BPNode* leaf);
-void split_internal_node(BPNode* parent, int index, BPNode* internal);
-BPNode* bulk_load(int* values, int n);
+typedef struct BPTree {
+    BPNode* root;
+} BPTree;
+
+BPTree bptree;
+
 
 // Create a new node
-BPNode* create_node(int is_leaf) {
+BPNode* create_node(NodeType type) {
     BPNode* new_node = (BPNode*)malloc(sizeof(BPNode));
-    new_node->is_leaf = is_leaf;
-    new_node->num_keys = 0;
+    new_node->type = type;
+    new_node->nkeys = 0;
     new_node->next = NULL;
     
     for (int i = 0; i < MAX_CHILDREN; i++) {
         new_node->children[i] = NULL;
     }
+
+    for (int i = 0; i < MAX_KEYS; i++) {
+        new_node->keys[i] = 0;
+    }
     
     return new_node;
 }
 
+void bptree_init(BPTree* bptree) {
+    bptree->root = create_node(LEAF);
+}
+
 // Search function
-BPNode* search(BPNode* root, int key) {
-    if (root == NULL) return NULL;
-    
-    // Always traverse to leaf node
-    while (!root->is_leaf) {
+BPNode* search(BPNode* node, int key) {
+    while (node->type != LEAF) {
         int i = 0;
-        while (i < root->num_keys && key >= root->keys[i]) {
+        while (i < node->nkeys && key >= node->keys[i]) {
             i++;
         }
-        root = root->children[i];
+        node = node->children[i];
     }
     
-    // Now at leaf node, search for the key
-    for (int i = 0; i < root->num_keys; i++) {
-        if (root->keys[i] == key) {
-            return root;
-        }
+    return node;
+}
+
+void node_insert_entry(BPNode* node, int key, BPNode* child) {
+    int i = 0;
+    while (key >= node->keys[i] && i < node->nkeys) {
+        i++;
     }
     
-    return NULL;
+    for (int j = node->nkeys; j > i; j--) {
+        node->keys[j] = node->keys[j - 1];
+        node->children[j + 1] = node->children[j];
+    }
+    
+    node->keys[i] = key;
+    node->children[i + 1] = child;
+    node->nkeys++;
+}
+
+typedef struct Split {
+    BPNode* right;
+    int key;
+} Split;
+
+Split node_split(BPNode* node, int key) {
+    BPNode* new_node = create_node(node->type);
+
+    Split split;
+    split.right = new_node;
+    split.key = node->keys[node->nkeys / 2];
+
+    // If the node is an internal node, we need to MOVE
+    // the first key to the parent node.
+    int copy_offset = 0;
+    if (node->type == INTERNAL) {
+        copy_offset = 1;
+    }
+
+    for (int i = node->nkeys / 2 + copy_offset; i < node->nkeys; i++) {
+        new_node->keys[new_node->nkeys++] = node->keys[i];
+        new_node->children[new_node->nkeys - 1] = node->children[i];
+        node->keys[i] = 0;
+        node->children[i] = NULL;
+    }
+
+    node->nkeys = node->nkeys / 2;
+
+    return split;
 }
 
 // Insert a key into the B+ tree
-BPNode* insert(BPNode* root, int key) {
-    if (root == NULL) {
-        root = create_node(1);  // Create a new leaf node as root
-        root->keys[0] = key;
-        root->num_keys = 1;
-        return root;
-    }
-    
-    if (root->num_keys == MAX_KEYS) {
-        BPNode* new_root = create_node(0);
-        new_root->children[0] = root;
-        split_child(new_root, 0, root);
-        insert_non_full(new_root, key);
-        return new_root;
-    }
-    
-    insert_non_full(root, key);
-    return root;
-}
-
-// Insert into a non-full node
-void insert_non_full(BPNode* node, int key) {
-    int i = node->num_keys - 1;
-    
-    if (node->is_leaf) {
-        // Find the position to insert the new key
-        while (i >= 0 && key < node->keys[i]) {
-            node->keys[i + 1] = node->keys[i];
-            i--;
+void node_insert(BPNode* node, int key, BPNode* child) {
+    BPNode* stack[100];
+    stack[0] = node;
+    int top = 1;
+    while (node->type != LEAF) {
+        int i = 0;
+        while (i < node->nkeys && key >= node->keys[i]) {
+            i++;
         }
-        
-        node->keys[i + 1] = key;
-        node->num_keys++;
-    } else {
-        // Find the child which is going to have the new key
-        while (i >= 0 && key < node->keys[i]) {
-            i--;
+        stack[top++] = node;
+        node = node->children[i];
+    }
+
+    while (top > 0) {
+        BPNode* parent = stack[top - 1];
+        node_insert_entry(node, key, child);
+        if (node->nkeys <= MAX_KEYS) {
+            return;
         }
-        i++;
-        
-        // Only split child if it's full
-        if (node->children[i]->num_keys == MAX_KEYS) {
-            split_child(node, i, node->children[i]);
-            // After split, the new key might need to go into the next child
-            if (key > node->keys[i]) {
-                i++;
-            }
+        Split split = node_split(node, key);
+        key = split.key;
+        child = split.right;
+
+        if (top - 1 == 0) {
+            BPNode* parent = create_node(INTERNAL);
+            parent->children[0] = bptree.root;
+            node_insert_entry(parent, key, child);
+            bptree.root = parent;
+            return;
         }
-        
-        insert_non_full(node->children[i], key);
+
+        node = stack[--top];
     }
 }
 
-// Split a child node
-void split_child(BPNode* parent, int index, BPNode* child) {
-    if (child->is_leaf) {
-        split_leaf_node(parent, index, child);
-    } else {
-        split_internal_node(parent, index, child);
-    }
-}
-
-void split_leaf_node(BPNode* parent, int index, BPNode* leaf) {
-    BPNode* new_leaf = create_node(1);  // Create new leaf node
-    
-    // When splitting a full node (3 keys) plus new key (total 4):
-    // Left node gets ceil(4/2) = 2 keys
-    // Right node gets floor(4/2) = 2 keys
-    int K = MAX_KEYS;  // K = 3 in our case
-    int split_point = (K + 1) / 2;  // ceil((K+1)/2) for left node
-    
-    // Copy the right portion of keys to the new leaf
-    new_leaf->num_keys = K - split_point;  // floor((K+1)/2) keys for right node
-    for (int i = 0; i < new_leaf->num_keys; i++) {
-        new_leaf->keys[i] = leaf->keys[i + split_point];
-    }
-    leaf->num_keys = split_point;
-    
-    // Insert separator key into parent (first key of new leaf)
-    for (int i = parent->num_keys; i > index; i--) {
-        parent->children[i + 1] = parent->children[i];
-        parent->keys[i] = parent->keys[i - 1];
-    }
-    parent->children[index + 1] = new_leaf;
-    parent->keys[index] = new_leaf->keys[0];
-    parent->num_keys++;
-    
-    // Link the leaf nodes
-    new_leaf->next = leaf->next;
-    leaf->next = new_leaf;
-}
-
-void split_internal_node(BPNode* parent, int index, BPNode* internal) {
-    BPNode* new_internal = create_node(0);  // Create new internal node
-    
-    // For internal nodes, we follow the same formula but the middle key moves up
-    int K = MAX_KEYS;
-    int split_point = (K + 1) / 2;  // Middle key position
-    
-    // Copy the right portion of keys (after the middle key)
-    new_internal->num_keys = K - split_point;
-    for (int i = 0; i < new_internal->num_keys; i++) {
-        new_internal->keys[i] = internal->keys[i + split_point];
-    }
-    
-    // Copy the right portion of children
-    for (int i = 0; i <= new_internal->num_keys; i++) {
-        new_internal->children[i] = internal->children[i + split_point];
-    }
-    
-    // Move up the middle key to the parent
-    for (int i = parent->num_keys; i > index; i--) {
-        parent->children[i + 1] = parent->children[i];
-        parent->keys[i] = parent->keys[i - 1];
-    }
-    parent->children[index + 1] = new_internal;
-    parent->keys[index] = internal->keys[split_point - 1];  // Middle key moves up
-    parent->num_keys++;
-    
-    internal->num_keys = split_point - 1;  // Left node keeps keys before middle
+void bptree_insert(BPTree* bptree, int key) {
+    node_insert(bptree->root, key, NULL);
 }
 
 // Print the tree (for debugging)
@@ -202,27 +163,27 @@ void print_tree(BPNode* root, int level) {
     }
     
     // Print node type and keys
-    if (root->is_leaf) {
+    if (root->type == LEAF) {
         printf("Leaf [ ");
     } else {
         printf("Internal [ ");
     }
     
     // Print keys
-    for (int i = 0; i < root->num_keys; i++) {
+    for (int i = 0; i < root->nkeys; i++) {
         printf("%d ", root->keys[i]);
     }
     printf("]");
     
     // Print leaf node links
-    if (root->is_leaf && root->next != NULL) {
+    if (root->type == LEAF && root->next != NULL) {
         printf(" -> next");
     }
     printf("\n");
     
     // Print children recursively
-    if (!root->is_leaf) {
-        for (int i = 0; i <= root->num_keys; i++) {
+    if (root->type != LEAF) {
+        for (int i = 0; i <= root->nkeys; i++) {
             print_tree(root->children[i], level + 1);
         }
     }
@@ -234,7 +195,7 @@ void search_and_print(BPNode* root, int key) {
     BPNode* result = search(root, key);
     if (result != NULL) {
         printf("Found key %d in leaf node with keys: ", key);
-        for (int i = 0; i < result->num_keys; i++) {
+        for (int i = 0; i < result->nkeys; i++) {
             printf("%d ", result->keys[i]);
         }
         printf("\n");
@@ -252,40 +213,39 @@ void run_example_1() {
     printf("Inserting values: 10, 20, 30, 40, 50, 60, 70, 80, 90\n");
     
     for(int i = 0; i < n; i++) {
-        root = insert(root, test_values[i]);
+        bptree_insert(&bptree, test_values[i]);
         printf("\nAfter inserting %d:\n", test_values[i]);
-        print_tree(root, 0);
+        print_tree(bptree.root, 0);
         printf("------------------------\n");
     }
     
     // Test searches
     int search_keys[] = {30, 50, 90, 100};
     for (int i = 0; i < 4; i++) {
-        search_and_print(root, search_keys[i]);
+        search_and_print(bptree.root, search_keys[i]);
     }
 }
 
 void run_example_2() {
-    BPNode* root = NULL;
     
     // Insert values in a pattern that allows for fuller nodes
     // First batch: multiples of 3
     for(int i = 3; i <= 99; i += 3) {
-        root = insert(root, i);
+        bptree_insert(&bptree, i);
     }
     
     // Second batch: multiples of 3 plus 1
     for(int i = 1; i <= 100; i += 3) {
-        root = insert(root, i);
+        bptree_insert(&bptree, i);
     }
     
     // Final batch: multiples of 3 plus 2
     for(int i = 2; i <= 98; i += 3) {
-        root = insert(root, i);
+        bptree_insert(&bptree, i);
     }
     
     printf("\nTree after inserting values in non-sequential order:\n");
-    print_tree(root, 0);
+    print_tree(bptree.root, 0);
 }
 
 void run_example_3() {
@@ -298,30 +258,28 @@ void run_example_3() {
     }
     
     // Bulk load the tree
-    BPNode* root = bulk_load(values, 100);
+    // BPNode* root = bulk_load(values, 100);
     
     printf("\nTree after bulk loading values 1-100:\n");
-    print_tree(root, 0);
+    print_tree(bptree.root, 0);
     
     // Test some searches
     int search_keys[] = {1, 50, 100, 101};
     for (int i = 0; i < 4; i++) {
-        search_and_print(root, search_keys[i]);
+        search_and_print(bptree.root, search_keys[i]);
     }
 }
 
 void run_example_4() {
-    BPNode* root = NULL;
-    
     printf("\nExample 4: Sequential Insertion Limitation\n");
     printf("This example shows why inserting sequential values one-by-one\n");
     printf("leads to partially-filled nodes.\n\n");
     
     // Insert values 1-4 one at a time
     for(int i = 1; i <= 4; i++) {
-        root = insert(root, i);
+        bptree_insert(&bptree, i);
         printf("\nAfter inserting %d:\n", i);
-        print_tree(root, 0);
+        print_tree(bptree.root, 0);
         
         if (i == 3) {
             printf("Note: Leaf node is now full with [1 2 3]\n");
@@ -339,23 +297,67 @@ void run_example_4() {
 }
 
 void run_example_5() {
-    BPNode* root = NULL;
     int test_values[] = {10, 20, 30, 25};
     
     printf("\nExample 5: Non-Sequential Insertion Pattern\n");
     printf("Inserting values in order: 10, 20, 30, 25\n");
     
     for(int i = 0; i < 4; i++) {
-        root = insert(root, test_values[i]);
+        bptree_insert(&bptree, test_values[i]);
         printf("\nAfter inserting %d:\n", test_values[i]);
-        print_tree(root, 0);
+        print_tree(bptree.root, 0);
         printf("------------------------\n");
     }
     
     // Test searches
     printf("\nTesting searches:\n");
     for (int i = 0; i < 4; i++) {
-        search_and_print(root, test_values[i]);
+        search_and_print(bptree.root, test_values[i]);
+    }
+}
+
+void run_example_10() {
+    int test_values[] = {10, 20, 30, 40, 50};
+    
+    printf("\nExample 10: Simple Sequential Insertion\n");
+    printf("Inserting values in order: 10, 20, 30, 40\n");
+    
+    for(int i = 0; i < 4; i++) {
+        bptree_insert(&bptree, test_values[i]);
+
+        printf("\nAfter inserting %d:\n", test_values[i]);
+        print_tree(bptree.root, 0);
+        printf("------------------------\n");
+    }
+}
+
+void run_example_11() {
+    int test_values[] = {10, 20, 30, 40, 25, 26, 29};
+    int n = sizeof(test_values) / sizeof(test_values[0]);
+    
+    printf("\nExample 11: Mixed Sequential and Non-Sequential Insertion\n");
+    printf("Inserting values: 10, 20, 30, 40, 25, 26, 29\n");
+    
+    for(int i = 0; i < n; i++) {
+        bptree_insert(&bptree, test_values[i]);
+        printf("\nAfter inserting %d:\n", test_values[i]);
+        print_tree(bptree.root, 0);
+        printf("------------------------\n");
+    }
+}
+
+void run_example_12() {
+    int test_values[] = {10, 20, 30, 40, 25};
+    int n = sizeof(test_values) / sizeof(test_values[0]);
+    
+    printf("\nExample 12: Mixed Sequential and Non-Sequential Insertion\n");
+    printf("Inserting values: 10, 20, 30, 40, 25\n");
+    
+    for(int i = 0; i < n; i++) {
+        bptree_insert(&bptree, test_values[i]);
+        printf("\nAfter inserting %d:\n", test_values[i]);
+        print_tree(bptree.root, 0);
+        printf("------------------------\n");
     }
 }
 
@@ -367,91 +369,14 @@ void print_usage() {
     printf("  3: Bulk Loading (values 1-100)\n");
     printf("  4: Sequential Insertion Limitation\n");
     printf("  5: Inserting 10, 20, 30, 25\n");
+    printf("  10: Simple Sequential Insertion (10, 20, 30, 40)\n");
+    printf("  11: Mixed Sequential/Non-Sequential (10, 20, 30, 40, 25, 26, 29)\n");
+    printf("  12: Mixed Sequential/Non-Sequential (10, 20, 30, 40, 25)\n");
+
 }
 
 BPNode* bulk_load(int* values, int n) {
-    if (n == 0) return NULL;
-
-    // Calculate number of leaf nodes needed
-    int num_leaves = (n + MAX_KEYS - 1) / MAX_KEYS;  // Ceiling division
-
-    // Allocate arrays for leaf nodes and internal nodes
-    BPNode** leaf_nodes = malloc(num_leaves * sizeof(BPNode*));
-    BPNode** current_level = malloc(num_leaves * sizeof(BPNode*));
-    BPNode** next_level = malloc(num_leaves * sizeof(BPNode*));
-
-    // Create and fill leaf nodes
-    int leaf_idx = 0;
-    BPNode* current_leaf = create_node(1);
-    leaf_nodes[leaf_idx++] = current_leaf;
-
-    for (int i = 0; i < n; i++) {
-        if (current_leaf->num_keys == MAX_KEYS) {
-            current_leaf = create_node(1);
-            leaf_nodes[leaf_idx - 1]->next = current_leaf;
-            leaf_nodes[leaf_idx++] = current_leaf;
-        }
-        current_leaf->keys[current_leaf->num_keys++] = values[i];
-    }
-
-    // Link leaf nodes and collect their first keys for parent internal nodes
-    int* first_keys = malloc(num_leaves * sizeof(int));
-    for (int i = 0; i < num_leaves; i++) {
-        first_keys[i] = leaf_nodes[i]->keys[0];
-        current_level[i] = leaf_nodes[i];
-    }
-
-    int current_size = num_leaves;
-
-    // Build internal nodes bottom-up
-    while (current_size > 1) {
-        int next_size = 0;
-        int i = 0;
-
-        while (i < current_size) {
-            BPNode* parent = create_node(0);
-            next_level[next_size++] = parent;
-
-            // Determine how many children to add to this parent (2 <= children <= ORDER)
-            int remaining = current_size - i;
-            int children_to_add = (remaining > MAX_CHILDREN) ? MAX_CHILDREN : remaining;
-
-            // Adjust to ensure remaining nodes can form valid groups
-            if (remaining - children_to_add > 0 && remaining - children_to_add < 2) {
-                children_to_add = remaining - 1;  // Leave at least 2 nodes for next group
-            }
-
-            // Add children to parent and set keys
-            for (int j = 0; j < children_to_add; j++) {
-                parent->children[j] = current_level[i + j];
-                if (j > 0) {
-                    // Use the first key of the leftmost leaf in this child's subtree
-                    BPNode* child = current_level[i + j];
-                    while (!child->is_leaf) {
-                        child = child->children[0];
-                    }
-                    parent->keys[j - 1] = child->keys[0];
-                    parent->num_keys++;
-                }
-            }
-            i += children_to_add;
-        }
-
-        // Update current_level for next iteration
-        current_size = next_size;
-        BPNode** temp = current_level;
-        current_level = next_level;
-        next_level = temp;
-    }
-
-    BPNode* root = (current_size == 1) ? current_level[0] : NULL;
-
-    free(leaf_nodes);
-    free(current_level);
-    free(next_level);
-    free(first_keys);
-
-    return root;
+    return NULL;
 }
 
 int main(int argc, char* argv[]) {
@@ -459,6 +384,8 @@ int main(int argc, char* argv[]) {
         print_usage();
         return 1;
     }
+    
+    bptree_init(&bptree);
     
     int example = atoi(argv[2]);
     
@@ -477,6 +404,15 @@ int main(int argc, char* argv[]) {
             break;
         case 5:
             run_example_5();
+            break;
+        case 10:
+            run_example_10();
+            break;
+        case 11:
+            run_example_11();
+            break;
+        case 12:
+            run_example_12();
             break;
         default:
             printf("Invalid example number: %d\n", example);
