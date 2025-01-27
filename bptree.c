@@ -212,6 +212,56 @@ void search_and_print(BPNode* root, int key) {
     }
 }
 
+typedef struct Parent {
+    BPNode* node;
+    BPNode* child;
+} Parent;
+
+void bptree_bulk_insert(BPTree* bptree, int* values, int n) {
+    BPNode* parent = create_node(INTERNAL);
+    BPNode* stack[100];
+    int top = 1;
+    stack[0] = parent;
+
+    bool insert_left_child = true;
+
+    int i = 0;
+    while (i < n) {
+        if (i == 16) {
+            printf("inserting %d\n", values[i]);
+        }
+        BPNode* leaf = create_node(LEAF);
+        
+        while (i < n && leaf->nkeys < MAX_KEYS) {
+            node_insert_entry(leaf, values[i], NULL);
+            i++;
+        }
+
+        if (insert_left_child) {
+            parent->children[0] = leaf;
+            insert_left_child = false;
+            continue;
+        } 
+
+        node_insert_entry(parent, leaf->keys[0], leaf);
+        if (parent->nkeys > MAX_KEYS) {
+            Split split = node_split(parent, leaf->keys[0]);
+            BPNode* new_parent = create_node(INTERNAL);
+            new_parent->children[0] = parent;
+            new_parent->children[1] = split.right;
+            new_parent->keys[0] = split.key;
+            new_parent->nkeys = 1;
+
+            stack[top++] = new_parent;
+            parent = split.right;
+        }
+
+        print_tree(stack[top - 1], 0);
+    }
+
+    bptree->root = stack[top - 1];
+}
+
 void run_example_1() {
     BPNode* root = NULL;
     int test_values[] = {10, 20, 30, 40, 50, 60, 70, 80, 90};
@@ -267,7 +317,7 @@ void run_example_3() {
     }
     
     // Bulk load the tree
-    // BPNode* root = bulk_load(values, 100);
+    bptree_bulk_insert(&bptree, values, 100);
     
     printf("\nTree after bulk loading values 1-100:\n");
     print_tree(bptree.root, 0);
@@ -381,11 +431,6 @@ void print_usage() {
     printf("  10: Simple Sequential Insertion (10, 20, 30, 40)\n");
     printf("  11: Mixed Sequential/Non-Sequential (10, 20, 30, 40, 25, 26, 29)\n");
     printf("  12: Mixed Sequential/Non-Sequential (10, 20, 30, 40, 25)\n");
-
-}
-
-BPNode* bulk_load(int* values, int n) {
-    return NULL;
 }
 
 int main(int argc, char* argv[]) {
