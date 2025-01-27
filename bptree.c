@@ -32,7 +32,7 @@ BPTree bptree;
 
 
 // Create a new node
-BPNode* create_node(NodeType type) {
+BPNode* node_new(NodeType type) {
     BPNode* new_node = (BPNode*)malloc(sizeof(BPNode));
     new_node->type = type;
     new_node->nkeys = 0;
@@ -50,7 +50,7 @@ BPNode* create_node(NodeType type) {
 }
 
 void bptree_init(BPTree* bptree) {
-    bptree->root = create_node(LEAF);
+    bptree->root = node_new(LEAF);
 }
 
 // Search function
@@ -88,7 +88,7 @@ typedef struct Split {
 } Split;
 
 Split node_split(BPNode* node, int key) {
-    BPNode* new_node = create_node(node->type);
+    BPNode* new_node = node_new(node->type);
 
     Split split;
     split.right = new_node;
@@ -144,7 +144,7 @@ void node_insert(BPNode* node, int key, BPNode* child) {
         child = split.right;
 
         if (parent == NULL) {
-            BPNode* parent = create_node(INTERNAL);
+            BPNode* parent = node_new(INTERNAL);
             parent->children[0] = bptree.root;
             node_insert_entry(parent, key, child);
             bptree.root = parent;
@@ -214,23 +214,54 @@ void search_and_print(BPNode* root, int key) {
 
 typedef struct Parent {
     BPNode* node;
-    BPNode* child;
+    struct Parent* parent;
 } Parent;
 
+Parent* parent_new(BPNode* parent_node, Parent* parent, BPNode* left_child) {
+    Parent* p = (Parent*)malloc(sizeof(Parent));
+    p->node = parent_node;
+    p->parent = parent;
+
+    if (left_child != NULL) {
+        p->node->children[0] = left_child;
+    }
+
+    return p;
+}
+
+void parent_insert(Parent* p, int key, BPNode* child) {
+    node_insert_entry(p->node, key, child);
+    
+    // child's parent does not change
+    if (p->node->nkeys <= MAX_KEYS) {
+        return;
+    }
+
+    Split split = node_split(p->node, key);
+
+    if (p->parent == NULL) {
+        bptree.root = node_new(INTERNAL);
+        p->parent = parent_new(bptree.root, NULL, p->node);
+    }
+
+    parent_insert(p->parent, split.key, split.right);
+    p->node = split.right;
+}
+
 void bptree_bulk_insert(BPTree* bptree, int* values, int n) {
-    BPNode* parent = create_node(INTERNAL);
-    BPNode* stack[100];
-    int top = 1;
-    stack[0] = parent;
+    Parent leaf_parent;
+    leaf_parent.node = node_new(INTERNAL);
+    leaf_parent.parent = NULL;
+    bptree->root = leaf_parent.node;
 
     bool insert_left_child = true;
 
     int i = 0;
     while (i < n) {
-        if (i == 16) {
+        if (i == 20) {
             printf("inserting %d\n", values[i]);
         }
-        BPNode* leaf = create_node(LEAF);
+        BPNode* leaf = node_new(LEAF);
         
         while (i < n && leaf->nkeys < MAX_KEYS) {
             node_insert_entry(leaf, values[i], NULL);
@@ -238,28 +269,16 @@ void bptree_bulk_insert(BPTree* bptree, int* values, int n) {
         }
 
         if (insert_left_child) {
-            parent->children[0] = leaf;
+            leaf_parent.node->children[0] = leaf;
             insert_left_child = false;
             continue;
         } 
 
-        node_insert_entry(parent, leaf->keys[0], leaf);
-        if (parent->nkeys > MAX_KEYS) {
-            Split split = node_split(parent, leaf->keys[0]);
-            BPNode* new_parent = create_node(INTERNAL);
-            new_parent->children[0] = parent;
-            new_parent->children[1] = split.right;
-            new_parent->keys[0] = split.key;
-            new_parent->nkeys = 1;
+        parent_insert(&leaf_parent, leaf->keys[0], leaf);
+        
 
-            stack[top++] = new_parent;
-            parent = split.right;
-        }
-
-        print_tree(stack[top - 1], 0);
+        print_tree(bptree->root, 0);
     }
-
-    bptree->root = stack[top - 1];
 }
 
 void run_example_1() {
