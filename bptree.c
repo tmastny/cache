@@ -229,6 +229,14 @@ Parent* parent_new(BPNode* parent_node, Parent* parent, BPNode* left_child) {
     return p;
 }
 
+void parent_free(Parent* p) {
+    while (p != NULL) {
+        Parent* next = p->parent;
+        free(p);
+        p = next;
+    }
+}
+
 void parent_insert(Parent* p, int key, BPNode* child) {
     node_insert_entry(p->node, key, child);
     
@@ -275,10 +283,9 @@ void bptree_bulk_insert(BPTree* bptree, int* values, int n) {
         } 
 
         parent_insert(&leaf_parent, leaf->keys[0], leaf);
-        
-
-        print_tree(bptree->root, 0);
     }
+
+    parent_free(leaf_parent.parent);
 }
 
 void run_example_1() {
