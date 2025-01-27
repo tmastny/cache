@@ -5,7 +5,9 @@
 
 // We'll use the definition of ORDER defined here:
 // https://cs186berkeley.net/notes/note4/
-#define ORDER 2 
+#ifndef ORDER
+#define ORDER 2  // Default order if not specified during compilation
+#endif
 #define MAX_KEYS (2 * ORDER)  // Maximum number of keys per node
 #define MAX_CHILDREN (2 * ORDER + 1)  // Same as ORDER, maximum number of children
 
