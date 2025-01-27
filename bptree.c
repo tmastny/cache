@@ -121,9 +121,6 @@ Split node_split(BPNode* node, int key) {
 
 // Insert a key into the B+ tree
 void node_insert(BPNode* node, int key, BPNode* child) {
-    if (key == 39) {
-        printf("node_insert: key = %d\n", key);
-    }
     BPNode* stack[100];
     int top = 1;
     stack[0] = NULL;
