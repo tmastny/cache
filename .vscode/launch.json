@@ -9,7 +9,7 @@
         "type": "cppdbg",
         "request": "launch",
         "program": "${workspaceFolder}/bptree/bptree",
-        "args": ["-e", "3"],
+        "args": ["-e", "100"],
         "stopAtEntry": false,
         "cwd": "${fileDirname}",
         "environment": [],

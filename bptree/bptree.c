@@ -460,6 +460,54 @@ void run_example_12() {
     }
 }
 
+int bptree_height(BPTree* bptree) {
+    if (bptree->root == NULL) return 0;
+    
+    int height = 1;
+    BPNode* node = bptree->root;
+    while (node->type != LEAF) {
+        height++;
+        node = node->children[0];  // Follow leftmost path
+    }
+    return height;
+}
+
+double bptree_avg_keys(BPTree* bptree) {
+    if (bptree->root == NULL) return 0;
+    
+    // Calculate max possible nodes for 100M elements
+    // At minimum 50% full, each leaf has ORDER keys
+    // So number of leaves ≈ N/ORDER
+    // Total nodes will be less than 2 * number of leaves
+    size_t max_nodes = (2 * 100000000) / ORDER + 1;
+    BPNode** queue = malloc(sizeof(BPNode*) * max_nodes);
+    if (queue == NULL) {
+        printf("Failed to allocate queue\n");
+        return 0;
+    }
+    
+    int total_nodes = 0;
+    int total_keys = 0;
+    int front = 0, rear = 0;
+    queue[rear++] = bptree->root;
+    
+    while (front < rear) {
+        BPNode* node = queue[front++];
+        total_nodes++;
+        total_keys += node->nkeys;
+        
+        if (node->type != LEAF) {
+            for (int i = 0; i <= node->nkeys; i++) {
+                queue[rear++] = node->children[i];
+            }
+        }
+    }
+    
+    double result = (double)total_keys / total_nodes;
+    free(queue);
+    return result;
+}
+
 void example_100() {
     const int N = 100000000;  // 100M elements
     const int SEARCHES = 1000000;  // 1M searches
@@ -476,14 +524,19 @@ void example_100() {
     clock_t end = clock();
     double bulk_time = ((double)(end - start)) / CLOCKS_PER_SEC;
     
-    // Free the values array as we don't need it anymore
+    // Measure tree characteristics
+    int height = bptree_height(&bptree);
+    double avg_keys = bptree_avg_keys(&bptree);
+    printf("Tree height: %d\n", height);
+    printf("Average keys per node: %.2f\n", avg_keys);
+    
     free(values);
     
-    // Perform random searches
+    // Rest of the search benchmark code...
     start = clock();
     int found = 0;
     for (int i = 0; i < SEARCHES; i++) {
-        int key = rand() % N;  // Random number between 0 and N-1
+        int key = rand() % N;
         Search result = bptree_search(&bptree, key);
         if (result.node != NULL) {
             found++;
@@ -492,7 +545,7 @@ void example_100() {
     end = clock();
     
     double search_time = ((double)(end - start)) / CLOCKS_PER_SEC;
-    double avg_search_time = (search_time * 1000000.0) / SEARCHES;  // Convert to microseconds
+    double avg_search_time = (search_time * 1000000.0) / SEARCHES;
     
     printf("Average search time: %.2f microseconds\n", avg_search_time);
 }
