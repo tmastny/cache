@@ -17,8 +17,6 @@ typedef enum NodeType {
     INTERNAL
 } NodeType;
 
-// Structure for B+ tree nodes
-// Add extra key to support splits
 typedef struct BPNode {
     int keys[MAX_KEYS + 1];
     struct BPNode* children[MAX_CHILDREN + 1];
@@ -33,8 +31,6 @@ typedef struct BPTree {
 
 BPTree bptree;
 
-
-// Create a new node
 BPNode* node_new(NodeType type) {
     BPNode* new_node = (BPNode*)malloc(sizeof(BPNode));
     new_node->type = type;
@@ -133,7 +129,6 @@ Split node_split(BPNode* node, int key) {
     return split;
 }
 
-// Insert a key into the B+ tree
 void node_insert(BPNode* node, int key, BPNode* child) {
     BPNode* stack[100];
     int top = 1;
@@ -175,35 +170,29 @@ void bptree_insert(BPTree* bptree, int key) {
     node_insert(bptree->root, key, NULL);
 }
 
-// Print the tree (for debugging)
 void print_tree(BPNode* root, int level) {
     if (root == NULL) return;
     
-    // Print indentation
     for (int i = 0; i < level; i++) {
         printf("    ");  // 4 spaces for each level
     }
     
-    // Print node type and keys
     if (root->type == LEAF) {
         printf("Leaf [ ");
     } else {
         printf("Internal [ ");
     }
     
-    // Print keys
     for (int i = 0; i < root->nkeys; i++) {
         printf("%d ", root->keys[i]);
     }
     printf("]");
     
-    // Print leaf node links
     if (root->type == LEAF && root->next != NULL) {
         printf(" -> next");
     }
     printf("\n");
     
-    // Print children recursively
     if (root->type != LEAF) {
         for (int i = 0; i <= root->nkeys; i++) {
             print_tree(root->children[i], level + 1);
@@ -211,7 +200,6 @@ void print_tree(BPNode* root, int level) {
     }
 }
 
-// Let's also add a helper function to make testing easier
 void search_and_print(BPTree* bptree, int key) {
     printf("\nSearching for %d:\n", key);
 
@@ -317,7 +305,6 @@ void run_example_1() {
         printf("------------------------\n");
     }
     
-    // Test searches
     int search_keys[] = {30, 50, 90, 100};
     for (int i = 0; i < 4; i++) {
         search_and_print(&bptree, search_keys[i]);
@@ -503,7 +490,8 @@ double bptree_avg_keys(BPTree* bptree) {
         }
     }
     
-    double result = (double)total_keys / total_nodes;
+    // double result = (double)total_keys / total_nodes;
+    double result = (double)total_keys / (total_nodes * ORDER);
     free(queue);
     return result;
 }

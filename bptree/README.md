@@ -1,3 +1,70 @@
+# bptree
+
+Incomplete implementation of B+ tree used to study 
+the relationship between the order of the tree and search time,
+especially as it relates to cache and random access speeds.
+
+## Features
+
+One thing I like about this implementation is that
+insert is not recursive, but managed by a stack.
+
+After looking at several different implementations,
+I thought this was clean and easy to follow, for me at least. 
+
+```c
+void node_insert(BPNode* node, int key, BPNode* child) {
+    BPNode* stack[100];
+    int top = 1;
+    stack[0] = NULL;
+    while (node->type != LEAF) {
+        int i = 0;
+        while (i < node->nkeys && key >= node->keys[i]) {
+            i++;
+        }
+        stack[top++] = node;
+        node = node->children[i];
+    }
+
+    while (top > 0) {
+        BPNode* parent = stack[top - 1];
+        node_insert_entry(node, key, child);
+        if (node->nkeys <= MAX_KEYS) {
+            return;
+        }
+        Split split = node_split(node, key);
+        key = split.key;
+        child = split.right;
+
+        if (parent == NULL) {
+            BPNode* parent = node_new(INTERNAL);
+            parent->children[0] = bptree.root;
+            node_insert_entry(parent, key, child);
+            bptree.root = parent;
+            return;
+        }
+
+        node = stack[--top];
+    }
+}
+```
+
+Implemented:
+- Insertion
+- Bulk insertion
+- Search
+
+Missing:
+- Scanning
+- Deletion
+
+
+## Benchmark
+
+See `bptree_bench.sh`.
+
+## Results
+
 Testing with ORDER = 2
 Average search time: 1.85 microseconds
 ----------------------------------------
@@ -33,7 +100,6 @@ Average search time: 1.97 microseconds
 Base assumptions:
 - Pointer chase (cache miss): ~100ns
 - Sequential int comparison: ~1ns (much faster than our previous estimate due to CPU pipelining)
-- Average case looks at half the keys in each node
 
 Formula:
 - Time = (height × pointer_chase_cost) + (height × avg_keys_per_node/2 × comparison_cost)
