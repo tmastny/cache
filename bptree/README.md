@@ -101,7 +101,8 @@ Base assumptions:
 - Pointer chase (cache miss): ~100ns
 - Sequential int comparison: ~1ns (much faster than our previous estimate due to CPU pipelining)
 
-Formula:
+Formulas:
+- Height = ⌈log_b(N)⌉ where b = 2×ORDER (max keys per node)
 - Time = (height × pointer_chase_cost) + (height × avg_keys_per_node/2 × comparison_cost)
 
 Let's calculate for a few key points:
