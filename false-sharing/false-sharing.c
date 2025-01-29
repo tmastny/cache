@@ -20,11 +20,10 @@ struct padded_mutex_128 {
 } __attribute__((aligned(128)));
 struct padded_mutex_128 padded_locks_128[16];
 
-// Some work to do while holding lock
+// Reduce work to make cache effects more prominent
 void do_work() {
-    // Small, consistent amount of work
     volatile int x = 0;
-    for(int i = 0; i < 100; i++) {
+    for(int i = 0; i < 10; i++) {  // Reduced from 100
         x += i;
     }
 }
@@ -37,25 +36,28 @@ double test_locks(int padding_type) {
         int id = omp_get_thread_num();
         int lock_index = id % 16;
         
-        // Each thread hammers its own lock
-        for(int i = 0; i < 1000000; i++) {
+        // Increase iterations for more stable measurements
+        for(int i = 0; i < 2000000; i++) {  // Increased from 1000000
             switch(padding_type) {
-                case 0: // regular
+                case 0:
                     pthread_mutex_lock(&regular_locks[lock_index]);
                     do_work();
                     pthread_mutex_unlock(&regular_locks[lock_index]);
                     break;
-                case 64: // 64-byte padding
+                case 64:
                     pthread_mutex_lock(&padded_locks_64[lock_index].mutex);
                     do_work();
                     pthread_mutex_unlock(&padded_locks_64[lock_index].mutex);
                     break;
-                case 128: // 128-byte padding
+                case 128:
                     pthread_mutex_lock(&padded_locks_128[lock_index].mutex);
                     do_work();
                     pthread_mutex_unlock(&padded_locks_128[lock_index].mutex);
                     break;
             }
+            
+            // Add tiny delay between operations to reduce contention
+            for(volatile int j = 0; j < 10; j++);
         }
     }
     
@@ -77,11 +79,17 @@ int main() {
         
         double regular_total = 0, padded_64_total = 0, padded_128_total = 0;
         
-        int iterations = 100;
+        // Increase number of measurements
+        int iterations = 100;  // Increased from 20
         for(int iter = 0; iter < iterations; iter++) {
             regular_total += test_locks(0);
             padded_64_total += test_locks(64);
             padded_128_total += test_locks(128);
+            
+            // Print progress
+            if ((iter + 1) % 10 == 0) {
+                printf("Completed %d iterations...\n", iter + 1);
+            }
         }
         
         printf("Average time with regular locks: %f seconds\n", 
@@ -90,10 +98,12 @@ int main() {
                padded_64_total / (float)iterations);
         printf("Average time with 128-byte padded locks: %f seconds\n", 
                padded_128_total / (float)iterations);
-        printf("Difference (regular vs 64-byte): %f seconds\n", 
-               (regular_total - padded_64_total) / (float)iterations);
-        printf("Difference (regular vs 128-byte): %f seconds\n", 
-               (regular_total - padded_128_total) / (float)iterations);
+        printf("Difference (regular vs 64-byte): %f seconds (%.2f%%)\n", 
+               (regular_total - padded_64_total) / (float)iterations,
+               100.0 * (regular_total - padded_64_total) / regular_total);
+        printf("Difference (regular vs 128-byte): %f seconds (%.2f%%)\n", 
+               (regular_total - padded_128_total) / (float)iterations,
+               100.0 * (regular_total - padded_128_total) / regular_total);
     }
     
     return 0;
