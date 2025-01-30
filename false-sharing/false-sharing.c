@@ -34,10 +34,10 @@ double test_locks(int padding_type) {
     #pragma omp parallel
     {
         int id = omp_get_thread_num();
-        int lock_index = id % 16;
+        // Always use adjacent locks to maximize false sharing effect
+        int lock_index = id;  
         
-        // Increase iterations for more stable measurements
-        for(int i = 0; i < 2000000; i++) {  // Increased from 1000000
+        for(int i = 0; i < 2000000; i++) {
             switch(padding_type) {
                 case 0:
                     pthread_mutex_lock(&regular_locks[lock_index]);
@@ -73,7 +73,7 @@ int main() {
     }
     
     // Run tests with different thread counts
-    for(int threads = 2; threads <= 8; threads *= 2) {
+    for(int threads = 2; threads <= 8; threads += 2) {
         printf("\nTesting with %d threads:\n", threads);
         omp_set_num_threads(threads);
         
