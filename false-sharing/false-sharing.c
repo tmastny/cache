@@ -23,9 +23,7 @@ struct padded_mutex_128 padded_locks_128[16];
 // Reduce work to make cache effects more prominent
 void do_work() {
     volatile int x = 0;
-    for(int i = 0; i < 10; i++) {  // Reduced from 100
-        x += i;
-    }
+    x += 1;
 }
 
 double test_locks(int padding_type) {
