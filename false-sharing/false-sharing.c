@@ -2,6 +2,8 @@
 #include <omp.h>
 #include <pthread.h>
 #include <unistd.h>  // for usleep
+#include <mach/thread_policy.h>
+#include <mach/thread_act.h>
 
 // Regular mutexes (potential false sharing)
 pthread_mutex_t regular_locks[16];
@@ -20,6 +22,14 @@ struct padded_mutex_128 {
 } __attribute__((aligned(128)));
 struct padded_mutex_128 padded_locks_128[16];
 
+// Pin thread to specific core (0-3 for P cores)
+void pin_to_core(int core_id) {
+    thread_port_t thread = pthread_mach_thread_np(pthread_self());
+    thread_affinity_policy_data_t policy = { core_id };
+    thread_policy_set(thread, THREAD_AFFINITY_POLICY, 
+                     (thread_policy_t)&policy, THREAD_AFFINITY_POLICY_COUNT);
+}
+
 // Reduce work to make cache effects more prominent
 void do_work() {
     volatile int x = 0;
@@ -32,6 +42,7 @@ double test_locks(int padding_type) {
     #pragma omp parallel
     {
         int id = omp_get_thread_num();
+        pin_to_core(id);  // Add this line to pin threads
         // Always use adjacent locks to maximize false sharing effect
         int lock_index = id;  
         

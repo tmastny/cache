@@ -18,18 +18,18 @@ Mutex operations can easily mask the false sharing effect.
 Single Lock (false-sharing.c)
 Threads | Regular | 128-byte Padded | Improvement
 --------|---------|-----------------|-------------
-2       | 0.029   | 0.029           | -1.02%
-4       | 0.031   | 0.031           | -0.78%
-6       | 0.063   | 0.037           | 41.66%
-8       | 0.079   | 0.041           | 48.06%
+2       | 0.029   | 0.030          | -4.19%
+4       | 0.030   | 0.032          | -4.04%
+6       | 0.064   | 0.037          | 42.99%
+8       | 0.072   | 0.042          | 41.90%
 
 Multi Lock (multilock.c)
 Threads | Regular | 128-byte Padded | Improvement
 --------|---------|-----------------|-------------
-2       | 0.369   | 0.369           | 0.15%
-4       | 0.228   | 0.224           | 1.68%
-6       | 0.343   | 0.201           | 41.47%
-8       | 0.321   | 0.163           | 49.40%
+2       | 0.367   | 0.367          | 0.22%
+4       | 0.222   | 0.219          | 1.41%
+6       | 0.335   | 0.197          | 41.18%
+8       | 0.309   | 0.160          | 48.22%
 
 Atomic Operations (atomic.c)
 Threads | Regular | 128-byte Padded | Improvement
