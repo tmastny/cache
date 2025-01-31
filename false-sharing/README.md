@@ -50,5 +50,7 @@ Threads | Regular | 128-byte Padded | Improvement
 
 ### ab (ab.c)
 Average time with regular variables: 0.019053 seconds
+
 Average time with padded variables: 0.018923 seconds
+
 Difference: 0.000130 seconds (0.68%)
