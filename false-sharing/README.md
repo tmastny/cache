@@ -16,7 +16,7 @@ Mutex operations can easily mask the false sharing effect.
 
 ## Results
 
-Single Lock (false-sharing.c)
+### Single Lock (false-sharing.c)
 Threads | Regular | 128-byte Padded | Improvement
 --------|---------|-----------------|-------------
 2       | 0.029   | 0.030          | -4.19%
@@ -24,7 +24,7 @@ Threads | Regular | 128-byte Padded | Improvement
 6       | 0.064   | 0.037          | 42.99%
 8       | 0.072   | 0.042          | 41.90%
 
-Multi Lock (multilock.c)
+### Multi Lock (multilock.c)
 Threads | Regular | 128-byte Padded | Improvement
 --------|---------|-----------------|-------------
 2       | 0.367   | 0.367          | 0.22%
@@ -32,7 +32,7 @@ Threads | Regular | 128-byte Padded | Improvement
 6       | 0.335   | 0.197          | 41.18%
 8       | 0.309   | 0.160          | 48.22%
 
-Atomic Operations (atomic.c)
+### Atomic Operations (atomic.c)
 Threads | Regular | 128-byte Padded | Improvement
 --------|---------|-----------------|-------------
 2       | 1.362   | 0.189           | 620.1%
@@ -40,7 +40,7 @@ Threads | Regular | 128-byte Padded | Improvement
 6       | 18.735  | 0.210           | 8821.5%
 8       | 20.378  | 0.227           | 8890.4%
 
-Simple Counter (counter.c)
+### Simple Counter (counter.c)
 Threads | Regular | 128-byte Padded | Improvement
 --------|---------|-----------------|-------------
 2       | 0.019   | 0.018           | 5.06%
@@ -48,7 +48,7 @@ Threads | Regular | 128-byte Padded | Improvement
 6       | 0.028   | 0.020           | 25.84%
 8       | 0.030   | 0.023           | 25.12%
 
-ab (ab.c)
+### ab (ab.c)
 Average time with regular variables: 0.019053 seconds
 Average time with padded variables: 0.018923 seconds
 Difference: 0.000130 seconds (0.68%)
