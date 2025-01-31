@@ -2,6 +2,7 @@
 
 Operation                | Approximate Cost
 ------------------------ | ----------------
+Non-atomic Add           | ~1-3 cycles
 Atomic Add               | ~5-50 cycles
 Syscall Entry            | ~100-1000 cycles
 Mutex Lock (uncontended) | ~200-2000 cycles
@@ -46,3 +47,8 @@ Threads | Regular | 128-byte Padded | Improvement
 4       | 0.021   | 0.019           | 7.97%
 6       | 0.028   | 0.020           | 25.84%
 8       | 0.030   | 0.023           | 25.12%
+
+ab (ab.c)
+Average time with regular variables: 0.019053 seconds
+Average time with padded variables: 0.018923 seconds
+Difference: 0.000130 seconds (0.68%)
