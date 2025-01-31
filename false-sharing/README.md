@@ -1,5 +1,13 @@
 # false-sharing
 
+## build
+
+```bash
+clang -Xpreprocessor -fopenmp -I/opt/homebrew/opt/libomp/include -L/opt/homebrew/opt/libomp/lib -lomp <name>.c -o <name>
+```
+
+## Reference
+
 Operation                | Approximate Cost
 ------------------------ | ----------------
 Non-atomic Add           | ~1-3 cycles
